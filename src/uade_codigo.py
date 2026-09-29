@@ -70,7 +70,7 @@ def _login_with_password() -> tuple[str, str | None]:
     return access, tokens.get("refresh_token")
 
 
-def _login_and_save(*, reason: str) -> str:
+def _login_and_save(reason: str) -> str:
     print(reason, file=sys.stderr)
     access, new_refresh = _login_with_password()
     if new_refresh:
