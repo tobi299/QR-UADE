@@ -4,13 +4,20 @@ URL: `https://yrinbpyqaqnkrytaaetf.supabase.co`
 
 Tabla: **`uade_qr_codigo`** (`id=1`, campo `codigo_hash`).
 
-Tabla: **`token`** (`id=1`, columna `token`) — JWT Microsoft (`access_token`) para que la PC/celular llame a UADE sin pasar por el VPS.
+Tabla: **`token`** (`id=1`, columnas `token` + `refresh_token`) — access y refresh Microsoft. GitHub Actions **lee y escribe** acá; no hace falta rotar secrets en GitHub.
+
+**Sembrado (una vez en la PC):**
+
+```powershell
+python main.py --login
+python main.py --vps
+```
 
 ## VPS (solo refresh + Supabase)
 
 El VPS **no** puede llegar a `qrolvidocredencial.uade.edu.ar`; sí a Microsoft y Supabase.
 
-En el VPS, `.env` con `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y el refresh (`UADE_REFRESH_TOKEN` o `src/token/refresh_token.local` tras un `--login` en la PC y copiar el archivo).
+`.env`: solo `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (el refresh se lee de Supabase).
 
 ```bash
 python main.py --vps
@@ -26,15 +33,12 @@ Cada ~45–50 min (cron):
 
 Workflow: **`.github/workflows/uade-vps-sync.yml`** (cron + ejecución manual).
 
-1. Subí el repo a GitHub.
-2. **Settings → Secrets and variables → Actions → New repository secret:**
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `UADE_REFRESH_TOKEN` (contenido de `src/token/refresh_token.local` desde tu PC)
-   - Opcional: `UADE_USERNAME`, `UADE_PASSWORD` si el refresh vence.
-3. **Actions → UADE token → Supabase → Run workflow**, o esperá el cron.
+1. Sembrá Supabase desde la PC (arriba).
+2. Secrets en GitHub: **`SUPABASE_URL`** y **`SUPABASE_SERVICE_ROLE_KEY`** (no guardes el refresh en GitHub).
+3. Opcional: `UADE_USERNAME` / `UADE_PASSWORD` si el refresh en Supabase expiró por completo.
+4. **Actions → Run workflow** o esperá el cron.
 
-El runner de GitHub es efímero: si Microsoft rota el refresh, actualizá el secret `UADE_REFRESH_TOKEN` desde la PC (`python main.py --login` y copiá el archivo local).
+Cada ejecución renueva el access en Microsoft y, si rota, guarda el **nuevo refresh** otra vez en Supabase.
 
 ## PC — código con token del VPS
 

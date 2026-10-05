@@ -18,7 +18,7 @@ except ImportError:
     pass
 
 from src import ms_auth
-from src.supabase_store import save_access_token, save_codigo
+from src.supabase_store import save_codigo, save_ms_tokens
 from src.uade_codigo import fetch_codigo_hash, save_refresh_token, write_pc_main
 
 
@@ -29,6 +29,13 @@ def cmd_login() -> None:
     if not refresh:
         raise RuntimeError("Login sin refresh_token")
     save_refresh_token(refresh)
+    access = tokens.get("access_token")
+    if access:
+        try:
+            save_ms_tokens(access, refresh)
+            print("refresh + access sincronizados a Supabase public.token", file=sys.stderr)
+        except RuntimeError as exc:
+            print(f"Aviso Supabase: {exc}", file=sys.stderr)
     print("refresh_token guardado en src/token/refresh_token.local", file=sys.stderr)
 
 
@@ -39,10 +46,12 @@ def run_sync(*, force_login: bool = False) -> str:
 
 
 def run_vps(*, force_login: bool = False) -> str:
-    """Refresca en Microsoft (sin UADE) y sube access_token → Supabase public.token."""
-    path = write_pc_main(force_login=force_login, codigo_hash=None)
-    access = json.loads(path.read_text(encoding="utf-8"))["access_token"]
-    save_access_token(access)
+    """Refresca en Microsoft (sin UADE) y sube access + refresh → Supabase."""
+    from src.uade_codigo import ensure_tokens
+
+    access, refresh = ensure_tokens(force_login=force_login)
+    save_ms_tokens(access, refresh)
+    path = write_pc_main(access=access, refresh=refresh, codigo_hash=None)
     print(f"Supabase public.token actualizado ({path})", file=sys.stderr)
     return access
 

@@ -31,7 +31,21 @@ def load_refresh_token() -> str | None:
         token = REFRESH_CACHE.read_text(encoding="utf-8").strip()
         if token:
             return token
-    return None
+    try:
+        from src.supabase_store import load_refresh_token as load_refresh_supabase
+
+        return load_refresh_supabase()
+    except RuntimeError:
+        return None
+
+
+def _sync_ms_tokens_to_supabase(access: str, refresh: str) -> None:
+    try:
+        from src.supabase_store import save_ms_tokens
+
+        save_ms_tokens(access, refresh)
+    except RuntimeError:
+        pass
 
 
 def _refresh_access_token(refresh_token: str) -> tuple[str, str | None]:
@@ -83,19 +97,24 @@ def _login_and_save(reason: str) -> tuple[str, str]:
 
 def ensure_tokens(*, force_login: bool = False) -> tuple[str, str]:
     if force_login:
-        return _login_and_save("Login forzado (user/pass .env)…")
+        access, refresh = _login_and_save("Login forzado (user/pass .env)…")
+        _sync_ms_tokens_to_supabase(access, refresh)
+        return access, refresh
 
     refresh = load_refresh_token()
     if not refresh:
-        return _login_and_save(
+        access, refresh = _login_and_save(
             "No hay refresh_token guardado; iniciando sesión con .env…"
         )
+        _sync_ms_tokens_to_supabase(access, refresh)
+        return access, refresh
 
     try:
         access, new_refresh = _refresh_access_token(refresh)
         if new_refresh:
             save_refresh_token(new_refresh)
             refresh = new_refresh
+        _sync_ms_tokens_to_supabase(access, refresh)
         return access, refresh
     except requests.RequestException as exc:
         raise RuntimeError(
@@ -103,9 +122,11 @@ def ensure_tokens(*, force_login: bool = False) -> tuple[str, str]:
             "Revisá internet, VPN o DNS."
         ) from exc
     except RuntimeError:
-        return _login_and_save(
+        access, refresh = _login_and_save(
             "Refresh vencido o inválido; iniciando sesión con .env…"
         )
+        _sync_ms_tokens_to_supabase(access, refresh)
+        return access, refresh
 
 
 def ensure_access_token(*, force_login: bool = False) -> str:
@@ -182,8 +203,15 @@ def build_pc_main_payload(
     }
 
 
-def write_pc_main(*, force_login: bool = False, codigo_hash: str | None = None) -> Path:
-    access, refresh = ensure_tokens(force_login=force_login)
+def write_pc_main(
+    *,
+    force_login: bool = False,
+    codigo_hash: str | None = None,
+    access: str | None = None,
+    refresh: str | None = None,
+) -> Path:
+    if access is None or refresh is None:
+        access, refresh = ensure_tokens(force_login=force_login)
     payload = build_pc_main_payload(access, refresh, codigo_hash=codigo_hash)
     PC_MAIN_PATH.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",

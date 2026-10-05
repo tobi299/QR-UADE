@@ -4,8 +4,9 @@
 # Secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL
 #   SUPABASE_SERVICE_ROLE_KEY
-#   UADE_REFRESH_TOKEN          ← refresh de src/token/refresh_token.local (PC)
-# Opcional si el refresh vence:
+# El refresh vive en Supabase (public.token.refresh_token). Sembrá una vez desde la PC:
+#   python main.py --login && python main.py --vps
+# Opcional si el refresh en Supabase vence del todo:
 #   UADE_USERNAME
 #   UADE_PASSWORD
 
@@ -35,7 +36,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          UADE_REFRESH_TOKEN: ${{ secrets.UADE_REFRESH_TOKEN }}
           UADE_USERNAME: ${{ secrets.UADE_USERNAME }}
           UADE_PASSWORD: ${{ secrets.UADE_PASSWORD }}
         run: python main.py --vps
