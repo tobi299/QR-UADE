@@ -1,5 +1,8 @@
 # GET del código QR desde Atajos (iPhone / Apple Watch)
 
+> **Flujo actual:** Supabase guarda solo el **access token** (`public.token`).  
+> El QR se obtiene con GET a UADE — ver **`README.md`** (pasos A + B).
+
 Proyecto Supabase: **QR UADE**  
 Base: `https://yrinbpyqaqnkrytaaetf.supabase.co`
 

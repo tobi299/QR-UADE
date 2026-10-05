@@ -5,7 +5,7 @@
 #   SUPABASE_URL
 #   SUPABASE_SERVICE_ROLE_KEY
 # El refresh vive en Supabase (public.token.refresh_token). Sembrá una vez desde la PC:
-#   python main.py --login && python main.py --vps
+#   python main.py --login && python main.py
 # Opcional si el refresh en Supabase vence del todo:
 #   UADE_USERNAME
 #   UADE_PASSWORD
@@ -15,8 +15,7 @@ name: UADE token → Supabase
 on:
   workflow_dispatch:
   schedule:
-    # Cada 45 min (UTC). Ajustá si querés horario AR: UTC-3 → ej. "15,45 * * * *" ≈ :45/:15 AR en invierno
-    - cron: "5,35 * * * *"
+    - cron: "0 * * * *"
 
 jobs:
   vps-sync:
@@ -32,10 +31,10 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: python main.py --vps
+      - name: python main.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           UADE_USERNAME: ${{ secrets.UADE_USERNAME }}
           UADE_PASSWORD: ${{ secrets.UADE_PASSWORD }}
-        run: python main.py --vps
+        run: python main.py
