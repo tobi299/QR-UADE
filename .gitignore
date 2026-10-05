@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 src/token/
+pc.main
 *.local
 
 # Python

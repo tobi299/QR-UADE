@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
+
+import requests
 
 try:
     from dotenv import load_dotenv
@@ -15,8 +18,8 @@ except ImportError:
     pass
 
 from src import ms_auth
-from src.supabase_store import save_codigo
-from src.uade_codigo import fetch_codigo_hash, save_refresh_token
+from src.supabase_store import save_access_token, save_codigo
+from src.uade_codigo import fetch_codigo_hash, save_refresh_token, write_pc_main
 
 
 def cmd_login() -> None:
@@ -33,6 +36,15 @@ def run_sync(*, force_login: bool = False) -> str:
     codigo = fetch_codigo_hash(force_login=force_login)
     save_codigo(codigo)
     return codigo
+
+
+def run_vps(*, force_login: bool = False) -> str:
+    """Refresca en Microsoft (sin UADE) y sube access_token → Supabase public.token."""
+    path = write_pc_main(force_login=force_login, codigo_hash=None)
+    access = json.loads(path.read_text(encoding="utf-8"))["access_token"]
+    save_access_token(access)
+    print(f"Supabase public.token actualizado ({path})", file=sys.stderr)
+    return access
 
 
 def main() -> None:
@@ -55,7 +67,23 @@ def main() -> None:
         metavar="SEC",
         help="Repetir sync cada SEC segundos (0 = una vez). También UADE_INTERVAL_SECONDS.",
     )
+    p.add_argument(
+        "--pc-main",
+        action="store_true",
+        help="Escribir pc.main (peticiones completas) en la raíz del proyecto.",
+    )
+    p.add_argument(
+        "--vps",
+        action="store_true",
+        help=(
+            "Modo VPS: refresh Microsoft, pc.main local y subir access_token "
+            "a Supabase (public.token id=1). No llama a qrolvidocredencial."
+        ),
+    )
     args = p.parse_args()
+
+    if args.vps and args.pc_main:
+        p.error("Usá solo uno: --vps o --pc-main")
 
     if args.login:
         cmd_login()
@@ -63,9 +91,30 @@ def main() -> None:
     interval = max(0, args.interval)
 
     while True:
+        codigo: str | None = None
         try:
-            codigo = run_sync(force_login=args.login)
-            print(codigo)
+            if args.vps:
+                run_vps(force_login=args.login)
+                print("ok", file=sys.stderr)
+            elif args.pc_main:
+                try:
+                    codigo = fetch_codigo_hash(force_login=args.login)
+                except (requests.RequestException, OSError) as exc:
+                    print(
+                        f"Aviso: no se pudo llamar a UADE ({exc}); "
+                        "pc.main igual incluye tokens y curl.",
+                        file=sys.stderr,
+                    )
+                path = write_pc_main(force_login=args.login, codigo_hash=codigo)
+                print(f"pc.main escrito en {path}", file=sys.stderr)
+                if codigo:
+                    save_codigo(codigo)
+                    print(codigo)
+                elif interval <= 0:
+                    sys.exit(0)
+            else:
+                codigo = run_sync(force_login=args.login)
+                print(codigo)
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
             if interval <= 0:

@@ -13,7 +13,9 @@ from src import ms_auth
 TOKEN_URL = ms_auth.TOKEN_URL
 CODIGO_URL = "https://qrolvidocredencial.uade.edu.ar/api/codigoqr"
 REFRESH_CACHE = Path(__file__).resolve().parent / "token" / "refresh_token.local"
+PC_MAIN_PATH = Path(__file__).resolve().parent.parent / "pc.main"
 WEB_ORIGIN = ms_auth.WEB_ORIGIN
+REFRESH_SCOPE = f"{ms_auth.SCOPE} openid profile"
 
 
 def save_refresh_token(token: str) -> None:
@@ -37,7 +39,7 @@ def _refresh_access_token(refresh_token: str) -> tuple[str, str | None]:
         "client_id": ms_auth.CLIENT_ID,
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
-        "scope": f"{ms_auth.SCOPE} openid profile",
+        "scope": REFRESH_SCOPE,
     }
     headers = {
         "accept": "*/*",
@@ -70,15 +72,16 @@ def _login_with_password() -> tuple[str, str | None]:
     return access, tokens.get("refresh_token")
 
 
-def _login_and_save(reason: str) -> str:
+def _login_and_save(reason: str) -> tuple[str, str]:
     print(reason, file=sys.stderr)
     access, new_refresh = _login_with_password()
-    if new_refresh:
-        save_refresh_token(new_refresh)
-    return access
+    if not new_refresh:
+        raise RuntimeError("Login sin refresh_token")
+    save_refresh_token(new_refresh)
+    return access, new_refresh
 
 
-def ensure_access_token(*, force_login: bool = False) -> str:
+def ensure_tokens(*, force_login: bool = False) -> tuple[str, str]:
     if force_login:
         return _login_and_save("Login forzado (user/pass .env)…")
 
@@ -90,9 +93,10 @@ def ensure_access_token(*, force_login: bool = False) -> str:
 
     try:
         access, new_refresh = _refresh_access_token(refresh)
-        if new_refresh and new_refresh != refresh:
+        if new_refresh:
             save_refresh_token(new_refresh)
-        return access
+            refresh = new_refresh
+        return access, refresh
     except requests.RequestException as exc:
         raise RuntimeError(
             "No hay conexión con login.microsoftonline.com. "
@@ -102,6 +106,90 @@ def ensure_access_token(*, force_login: bool = False) -> str:
         return _login_and_save(
             "Refresh vencido o inválido; iniciando sesión con .env…"
         )
+
+
+def ensure_access_token(*, force_login: bool = False) -> str:
+    access, _ = ensure_tokens(force_login=force_login)
+    return access
+
+
+def _codigo_request(access_token: str) -> dict:
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "authorization": f"Bearer {access_token}",
+        "referer": f"{WEB_ORIGIN}/",
+    }
+    return {
+        "method": "GET",
+        "url": CODIGO_URL,
+        "headers": headers,
+    }
+
+
+def _refresh_request(refresh_token: str) -> dict:
+    return {
+        "method": "POST",
+        "url": TOKEN_URL,
+        "headers": {
+            "accept": "*/*",
+            "content-type": "application/x-www-form-urlencoded;charset=utf-8",
+            "origin": WEB_ORIGIN,
+            "referer": f"{WEB_ORIGIN}/",
+        },
+        "body_form_urlencoded": {
+            "client_id": ms_auth.CLIENT_ID,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "scope": REFRESH_SCOPE,
+        },
+    }
+
+
+def build_pc_main_payload(
+    access: str, refresh: str, *, codigo_hash: str | None = None
+) -> dict:
+    from datetime import datetime, timezone
+
+    get_req = _codigo_request(access)
+    refresh_req = _refresh_request(refresh)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "note": (
+            "Ejecutá step_2 en tu PC/red local si el VPS no llega a "
+            "qrolvidocredencial.uade.edu.ar. step_1 renueva access_token en Microsoft."
+        ),
+        "last_codigo_hash": codigo_hash,
+        "refresh_token": refresh,
+        "access_token": access,
+        "step_1_refresh_access_token": refresh_req,
+        "step_2_get_codigo_hash": get_req,
+        "curl_step_1": (
+            f'curl -s -X POST "{TOKEN_URL}" '
+            f'-H "content-type: application/x-www-form-urlencoded;charset=utf-8" '
+            f'-H "origin: {WEB_ORIGIN}" '
+            f'-H "referer: {WEB_ORIGIN}/" '
+            f'--data-urlencode "client_id={ms_auth.CLIENT_ID}" '
+            f'--data-urlencode "grant_type=refresh_token" '
+            f'--data-urlencode "refresh_token={refresh}" '
+            f'--data-urlencode "scope={REFRESH_SCOPE}"'
+        ),
+        "curl_step_2": (
+            f'curl -s "{CODIGO_URL}" '
+            f'-H "accept: application/json, text/plain, */*" '
+            f'-H "authorization: Bearer {access}" '
+            f'-H "referer: {WEB_ORIGIN}/"'
+        ),
+    }
+
+
+def write_pc_main(*, force_login: bool = False, codigo_hash: str | None = None) -> Path:
+    access, refresh = ensure_tokens(force_login=force_login)
+    payload = build_pc_main_payload(access, refresh, codigo_hash=codigo_hash)
+    PC_MAIN_PATH.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return PC_MAIN_PATH
 
 
 def fetch_codigo_hash(*, force_login: bool = False) -> str:

@@ -1,0 +1,41 @@
+# Refresca access_token (Microsoft) y lo sube a Supabase public.token.
+# No requiere llegar a qrolvidocredencial.uade.edu.ar.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+#   UADE_REFRESH_TOKEN          ← refresh de src/token/refresh_token.local (PC)
+# Opcional si el refresh vence:
+#   UADE_USERNAME
+#   UADE_PASSWORD
+
+name: UADE token → Supabase
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Cada 45 min (UTC). Ajustá si querés horario AR: UTC-3 → ej. "15,45 * * * *" ≈ :45/:15 AR en invierno
+    - cron: "5,35 * * * *"
+
+jobs:
+  vps-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: python main.py --vps
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UADE_REFRESH_TOKEN: ${{ secrets.UADE_REFRESH_TOKEN }}
+          UADE_USERNAME: ${{ secrets.UADE_USERNAME }}
+          UADE_PASSWORD: ${{ secrets.UADE_PASSWORD }}
+        run: python main.py --vps
