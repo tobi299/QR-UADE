@@ -13,14 +13,21 @@
 name: UADE token → Supabase
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   schedule:
-    - cron: "0 * * * *"
+    # Minuto 17 UTC (no :00) — GitHub suele retrasar o saltear crons en punto
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
 
 jobs:
   vps-sync:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: uade-token-supabase
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
