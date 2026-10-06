@@ -1,6 +1,7 @@
 # Secretos y credenciales (nunca al repo)
 .env
 .env.*
+request.local
 !.env.example
 src/token/
 *.local

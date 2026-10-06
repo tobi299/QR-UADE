@@ -13,7 +13,9 @@
 name: UADE token → Supabase
 
 on:
+  workflow_dispatch: {}
   repository_dispatch:
+    types: [run]
   schedule:
     - cron: '1 * * * *'
 
