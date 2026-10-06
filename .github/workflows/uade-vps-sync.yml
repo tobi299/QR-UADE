@@ -13,10 +13,8 @@
 name: UADE token → Supabase
 
 on:
-  workflow_dispatch: {}
   schedule:
-    # Cada minuto (UTC). GitHub puede agrupar/retrasar; no siempre es exacto 1/min.
-    - cron: "1 * * * *"
+    - cron: '1 * * * *'
 
 permissions:
   contents: read
